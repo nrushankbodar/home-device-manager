@@ -37,6 +37,30 @@ export default function Dashboard({ user, onLogout }) {
 
   useEffect(() => {
     loadDashboard();
+
+    const ws = new WebSocket("ws://localhost:8000/ws");
+
+    ws.onopen = () => {
+        console.log("WebSocket Connected");
+    };
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        console.log("Live Update:", data);
+
+        if (data.event === "device_updated") {
+            loadDashboard();
+        }
+    };
+
+    ws.onclose = () => {
+        console.log("WebSocket Disconnected");
+    };
+
+    return () => {
+        ws.close();
+    };
   }, []);
 
   async function addRoom(event) {

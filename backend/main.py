@@ -3,7 +3,8 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import List
 from auth import create_access_token, get_current_user, hash_password, verify_password
 from database import Base, engine, get_db
 from models import Device, Room, User
@@ -28,11 +29,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self,websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_json(message)
+manager= ConnectionManager()
 
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 @app.post("/auth/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreate, db: Session = Depends(get_db)):
@@ -122,18 +147,30 @@ def create_device(
 
 
 @app.patch("/devices/{device_id}/toggle", response_model=DeviceOut)
-def toggle_device(
+async def toggle_device(
     device_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    device = db.query(Device).filter(Device.id == device_id, Device.user_id == current_user.id).first()
+    device = db.query(Device).filter(
+        Device.id == device_id,
+        Device.user_id == current_user.id
+    ).first()
+
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
     device.is_on = not device.is_on
+
     db.commit()
     db.refresh(device)
+
+    await manager.broadcast({
+        "event": "device_updated",
+        "device_id": device.id,
+        "is_on": device.is_on
+    })
+
     return device
 
 
