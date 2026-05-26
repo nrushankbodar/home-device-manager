@@ -58,3 +58,38 @@ class DeviceOut(BaseModel):
     type: str
     is_on: bool
     created_at: datetime
+
+
+class SensorReadingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    device_id: int
+    value: float
+    type: str
+    timestamp: datetime
+
+
+class AutomationRuleCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    trigger_device_id: int
+    condition_type: str = Field(min_length=1, max_length=10)
+    threshold_value: float
+    action_device_id: int
+    action_state: bool
+
+
+class AutomationRuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    name: str
+    trigger_device_id: int
+    condition_type: str
+    threshold_value: float
+    action_device_id: int
+    action_state: bool
+    is_active: bool
+    trigger_device: DeviceOut
+    action_device: DeviceOut

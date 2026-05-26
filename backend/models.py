@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -42,3 +42,35 @@ class Device(Base):
 
     room = relationship("Room", back_populates="devices")
     owner = relationship("User", back_populates="devices")
+    readings = relationship("SensorReading", back_populates="device", cascade="all, delete-orphan")
+
+
+class SensorReading(Base):
+    __tablename__ = "sensor_readings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
+    value = Column(Float, nullable=False)
+    type = Column(String(50), nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    device = relationship("Device", back_populates="readings")
+
+
+class AutomationRule(Base):
+    __tablename__ = "automation_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(120), nullable=False)
+    trigger_device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
+    condition_type = Column(String(10), nullable=False)  # ">" or "<"
+    threshold_value = Column(Float, nullable=False)
+    action_device_id = Column(Integer, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
+    action_state = Column(Boolean, nullable=False)  # True = Turn ON, False = Turn OFF
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    # Relationships
+    owner = relationship("User")
+    trigger_device = relationship("Device", foreign_keys=[trigger_device_id])
+    action_device = relationship("Device", foreign_keys=[action_device_id])
